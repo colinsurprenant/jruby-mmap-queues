@@ -54,11 +54,11 @@ class MmapDriver
   end
 
   def reopen_log
-    @mmap = Mmap.new(@queue_file, 500 * 1024 * 1024)
+    @mmap = Mmap.new(@queue_file, 100 * 1024 * 1024)
   end
 
   def write(data)
-    @mmap.safe_write(data)
+    @mmap.put_bytes(data)
   end
 
   def close
