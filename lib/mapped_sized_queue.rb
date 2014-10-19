@@ -22,22 +22,26 @@ module Mmap
       @serialize = options.fetch(:serialize)
       @size = size
 
-      # @mq is the in-memory queue and @pq the persistent queue
+      # in-memory queue
       @mq = []
-      @pq = PagedQueue.new(fname, 100 * 1024 * 1024)
-
       @num_pop_waiting = 0
       @num_push_waiting = 0
       @mutex = Mutex.new
       @non_empty = ConditionVariable.new
       @non_full = ConditionVariable.new
+
+      # persistent queue
+      @pq = PagedQueue.new(fname, 100 * 1024 * 1024)
+
+      # load persistent queue elements into in-memory queue
+      @pq.each{|data| push(data, persist = false)}
     end
 
     def empty?
       @mutex.synchronize{@mq.empty?}
     end
 
-    def push(data)
+    def push(data, persist = true)
       @mutex.synchronize do
         while true
           break if @mq.length < @size
@@ -49,7 +53,7 @@ module Mmap
           end
         end
 
-        @pq.push(serialize(data))
+        @pq.push(serialize(data)) if persist
         @mq.push(data)
 
         @non_empty.signal
@@ -70,12 +74,17 @@ module Mmap
     end
     alias_method :shift, :pop
 
+    def size
+      @mq.size
+    end
+    alias_method :length, :size
+
     def close
       @pq.close
     end
 
     def purge
-      raise("unimplemented")
+      @pq.purge
     end
 
     private
@@ -98,6 +107,8 @@ module Mmap
         end
       end
     end
+
+    # TBD serialization, with pluggable strategy?
 
     def serialize(data)
       data
