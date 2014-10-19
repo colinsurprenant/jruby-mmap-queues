@@ -21,12 +21,16 @@ module Mmap
       @cache.values.each{|page| page.close}
     end
 
+    def path(index)
+      "#{@page_base_fname}.#{index}"
+    end
+
     private
 
     def add(index)
       # TBD uncache, LRU?
       @num_pages += 1
-      page = Mmap::ByteBuffer.new("#{@page_base_fname}.#{index}", @page_size)
+      page = Mmap::ByteBuffer.new(path(index), @page_size)
       page.load
       @cache[index] = page
     end
@@ -214,6 +218,20 @@ module Mmap
 
     def size
       @meta.size
+    end
+    alias_method :length, :size
+
+    # reset queue to zero without purging any page and without closing
+    def clear
+      @meta.clear
+    end
+
+    # close queue and delete all page files
+    def purge
+      files = (0..@meta.head_page_index).map{|index| @cache.path(index)}
+      close
+      File.delete(@fname) if File.exist?(@fname)
+      files.each{|f| File.delete(f) if File.exist?(f)}
     end
 
     def close

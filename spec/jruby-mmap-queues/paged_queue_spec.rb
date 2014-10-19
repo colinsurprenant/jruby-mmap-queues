@@ -197,4 +197,48 @@ describe Mmap::PagedQueue do
     expect(q.count).to eq(0)
   end
 
+  it "should purge page files" do
+    q = Mmap::PagedQueue.new(@path, 16)
+    expect(q.page_usable_size).to eq(8)
+
+    expect(File.exist?(@path)).to be true
+    expect(File.exist?("#{@path}.0")).to be true
+    expect(File.exist?("#{@path}.1")).to be false
+    expect(File.exist?("#{@path}.2")).to be false
+
+    q.push("hello")
+    expect(File.exist?("#{@path}.1")).to be false
+    expect(File.exist?("#{@path}.2")).to be false
+
+    q.push("world")
+    expect(File.exist?("#{@path}.1")).to be true
+    expect(File.exist?("#{@path}.2")).to be false
+
+    q.push("foobar")
+    expect(File.exist?("#{@path}.1")).to be true
+    expect(File.exist?("#{@path}.2")).to be true
+
+    q.purge
+    expect(File.exist?(@path)).to be false
+    expect(File.exist?("#{@path}.0")).to be false
+    expect(File.exist?("#{@path}.1")).to be false
+    expect(File.exist?("#{@path}.2")).to be false
+  end
+
+  it "should clear queue" do
+    q = Mmap::PagedQueue.new(@path, KB)
+
+    expect(q.push("foo")).to eq(3)
+    q.clear
+    expect(q.meta.head_page_index).to eq(0)
+    expect(q.meta.head_page_offset).to eq(0)
+    expect(q.meta.tail_page_index).to eq(0)
+    expect(q.meta.tail_page_offset).to eq(0)
+    expect(q.meta.size).to eq(0)
+
+    expect(q.push("bar")).to eq(3)
+    expect(q.pop).to eq("bar")
+
+    q.close
+  end
 end
