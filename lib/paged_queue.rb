@@ -3,10 +3,12 @@
 require "jruby-mmap"
 
 module Mmap
+
+  # simple caching page manager
   class PageCache
 
-    def initialize(cache_size, page_base_fname, page_size)
-      @cache_size = cache_size
+    def initialize(page_base_fname, page_size, options = {})
+      @cache_size = options.fetch(:cache_size)
       @page_base_fname = page_base_fname
       @page_size = page_size
       @cache = {}
@@ -33,6 +35,35 @@ module Mmap
       page = Mmap::ByteBuffer.new(path(index), @page_size)
       page.load
       @cache[index] = page
+    end
+  end
+
+  # single page manager, useful for sized queue where the same
+  # page will be used as a ring buffer
+  #
+  # make sure to use a page size large enough to hold the max number
+  # of items + 1 in the queue - FOR NOW there are no checks for overfow
+  # this will only be possible once the metadata is refactored into the
+  # managers
+
+  class SinglePage
+
+    def initialize(page_base_fname, page_size, options = {})
+      @page_base_fname = page_base_fname
+      @page_size = page_size
+      @page = Mmap::ByteBuffer.new(path, @page_size)
+    end
+
+    def page(index)
+      @page
+    end
+
+    def close
+      @page.close
+    end
+
+    def path(index = 0)
+      "#{@page_base_fname}.#{0}"
     end
   end
 
@@ -114,6 +145,10 @@ module Mmap
 
   class PagedQueueError < StandardError; end
 
+
+  # TBD: refactor the page manager to include the metadata handling and expose
+  # interface which abstracts the head/tail pointers
+
   # PagedQueue
   # non blocking, non thread-safe persistent queue implementation using mmap
   class PagedQueue
@@ -135,17 +170,17 @@ module Mmap
     # page management strategies, for example, in a sized queue we may want to reuse
     # pages as in a circular buffer since we know the queue size is limited
 
-    def initialize(fname, page_size)
+    def initialize(fname, page_size, page_manager, options = {})
       @fname = fname
       @page_size = page_size
       @page_usable_size = @page_size - (2 * INT_BYTES)
 
       @meta = MappedMetadata.new(@fname)
-      @cache = PageCache.new(2, @fname, @page_size)
+      @pages = page_manager.new(@fname, @page_size, options)
 
       # prime the cache with tail & head pages
-      @cache.page(@meta.head_page_index)
-      @cache.page(@meta.tail_page_index)
+      @pages.page(@meta.head_page_index)
+      @pages.page(@meta.tail_page_index)
     end
 
     # @param data [String] write the data string backing bytes to queue
@@ -160,7 +195,7 @@ module Mmap
         @meta.head_page_index += 1
         @meta.head_page_offset = offset = 0
       end
-      page = @cache.page(@meta.head_page_index)
+      page = @pages.page(@meta.head_page_index)
       page.position = offset
       page.put_int(size)
       page.put_bytes(data)
@@ -196,7 +231,7 @@ module Mmap
       while true
         return if index >= @meta.head_page_index && offset >= @meta.head_page_offset
 
-        page = @cache.page(index)
+        page = @pages.page(index)
         page.position = offset
 
         if (size = page.get_int) == 0
@@ -205,7 +240,7 @@ module Mmap
           index += 1
           return if index >= @meta.head_page_index && offset >= @meta.head_page_offset
 
-          page = @cache.page(index)
+          page = @pages.page(index)
           page.position = offset
           size = page.get_int
         end
@@ -228,7 +263,7 @@ module Mmap
 
     # close queue and delete all page files
     def purge
-      files = (0..@meta.head_page_index).map{|index| @cache.path(index)}
+      files = (0..@meta.head_page_index).map{|index| @pages.path(index)}
       close
       File.delete(@fname) if File.exist?(@fname)
       files.each{|f| File.delete(f) if File.exist?(f)}
@@ -236,19 +271,19 @@ module Mmap
 
     def close
       @meta.close
-      @cache.close
+      @pages.close
     end
 
     private
 
-    # @param read [Boolean] physically read & return the data or not
-    # @return [String|Integer|nil] nil if no items, data String if read == true otherwise size of data
+    # @param read [Boolean] when true physically read & return the data
+    # @return [String|Integer|nil] nil if no items, data String if read is true otherwise size of data
     def forward(read = true)
       offset = @meta.tail_page_offset
       index = @meta.tail_page_index
       return nil if index >= @meta.head_page_index && offset >= @meta.head_page_offset
 
-      page = @cache.page(index)
+      page = @pages.page(index)
       page.position = offset
 
       if (size = page.get_int) == 0
@@ -257,7 +292,7 @@ module Mmap
         index = @meta.tail_page_index += 1
         return nil if index >= @meta.head_page_index && offset >= @meta.head_page_offset
 
-        page = @cache.page(index)
+        page = @pages.page(index)
         page.position = offset
         size = page.get_int
       end

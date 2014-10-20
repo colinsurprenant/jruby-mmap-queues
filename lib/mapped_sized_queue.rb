@@ -16,7 +16,16 @@ module Mmap
     # @option options [Boolean] :debug, default to false
     # @option options [Boolean] :seralize, serialize to json, default to true
     def initialize(fname, size, options = {})
-      options = {:debug => false, :serialize => true}.merge(options)
+
+      # default options
+      options = {
+        :debug => false,
+        :serialize => true,
+        :page_size => 100 * 1024 * 1024,
+        :manager_class => Mmap::PageCache,
+        :manager_options => {:cache_size => 2},
+      }.merge(options)
+
       raise(ArgumentError, "queue size must be positive") unless size > 0
 
       @serialize = options.fetch(:serialize)
@@ -31,9 +40,9 @@ module Mmap
       @non_full = ConditionVariable.new
 
       # persistent queue
-      @pq = PagedQueue.new(fname, 100 * 1024 * 1024)
+      @pq = PagedQueue.new(fname, options[:page_size], options[:manager_class], options[:manager_options])
 
-      # load persistent queue elements into in-memory queue
+      # load existing persistent queue elements into in-memory queue
       @pq.each{|data| push(data, persist = false)}
     end
 
@@ -78,6 +87,16 @@ module Mmap
       @mq.size
     end
     alias_method :length, :size
+
+    def clear
+      @mutex.synchronize do
+        @mq = []
+        @num_pop_waiting = 0
+        @num_push_waiting = 0
+        @non_full.signal
+        @pq.clear
+      end
+    end
 
     def close
       @pq.close
