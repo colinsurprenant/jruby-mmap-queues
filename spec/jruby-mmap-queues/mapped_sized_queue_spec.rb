@@ -1,5 +1,4 @@
 require "spec_helper"
-require "mapped_sized_queue"
 
 def purge(base_path)
   Dir["#{base_path}*"].each do |path|

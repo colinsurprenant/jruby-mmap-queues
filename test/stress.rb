@@ -2,7 +2,7 @@ $:.unshift File.expand_path("../../lib", __FILE__)
 
 require "thread"
 require "bundler/setup"
-require "mapped_sized_queue"
+require "jruby-mmap-queues"
 
 Thread.abort_on_exception = true
 

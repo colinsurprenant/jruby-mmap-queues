@@ -1,7 +1,7 @@
 # encoding: utf-8
 
 require "thread"
-require "paged_queue"
+require "jruby-mmap-queues/paged_queue"
 
 module Mmap
   class NoSerializer

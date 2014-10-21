@@ -1,5 +1,4 @@
 require "spec_helper"
-require "paged_queue"
 
 KB = 1024
 MB = KB ** 2

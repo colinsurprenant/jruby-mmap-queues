@@ -4,7 +4,7 @@ require "benchmark"
 require "thread"
 require "bundler/setup"
 
-require "mapped_sized_queue"
+require "jruby-mmap-queues"
 
 CONSUMERS = 2
 PRODUCERS = 1
