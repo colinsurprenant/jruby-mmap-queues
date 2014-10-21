@@ -54,7 +54,7 @@ module Mmap
       begin
         return @mq.empty?
       ensure
-        @mutex.unlock rescue nil
+        @mutex.unlock #rescue nil
       end
     end
 
@@ -62,19 +62,19 @@ module Mmap
       @mutex.lock
       begin
         while true
-          break if @mq.length < @size
+          if @mq.size < @size
+            @pq.push(@serializer.serialize(data)) if persist
+            @mq.push(data)
+
+            @non_empty.signal
+            return self
+          end
+
           @non_full.wait(@mutex)
         end
-
-        @pq.push(@serializer.serialize(data)) if persist
-        @mq.push(data)
-
-        @non_empty.signal
       ensure
-        @mutex.unlock rescue nil
+        @mutex.unlock #rescue nil
       end
-
-      self
     end
     alias_method :<<, :push
 
@@ -93,7 +93,7 @@ module Mmap
           @non_empty.wait(@mutex)
         end
       ensure
-        @mutex.unlock rescue nil
+        @mutex.unlock #rescue nil
       end
     end
     alias_method :shift, :pop
@@ -103,7 +103,7 @@ module Mmap
       begin
         return @mq.size
       ensure
-        @mutex.unlock rescue nil
+        @mutex.unlock #rescue nil
       end
     end
     alias_method :length, :size
