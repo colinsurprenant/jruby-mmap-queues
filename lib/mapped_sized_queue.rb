@@ -4,6 +4,10 @@ require "thread"
 require "paged_queue"
 
 module Mmap
+  class NoSerializer
+    def serialize(data); data end
+    def deserialize(data); data end
+  end
 
   # MappedSizedQueue blocking thread-safe sized queue
   # uses both an in-memory queue and a persistent queue and pushes to both
@@ -20,15 +24,16 @@ module Mmap
       # default options
       options = {
         :debug => false,
-        :serialize => true,
         :page_size => 100 * 1024 * 1024,
         :manager_class => Mmap::PageCache,
         :manager_options => {:cache_size => 2},
+        :serializer_class => Mmap::NoSerializer,
       }.merge(options)
 
       raise(ArgumentError, "queue size must be positive") unless size > 0
 
-      @serialize = options.fetch(:serialize)
+      @serializer = options.fetch(:serializer_class).new
+
       @size = size
 
       # in-memory queue
@@ -41,7 +46,7 @@ module Mmap
       @pq = PagedQueue.new(fname, options[:page_size], options[:manager_class], options[:manager_options])
 
       # load existing persistent queue elements into in-memory queue
-      @pq.each{|data| push(data, persist = false)}
+      @pq.each{|data| push(@serializer.deserialize(data), persist = false)}
     end
 
     def empty?
@@ -61,7 +66,7 @@ module Mmap
           @non_full.wait(@mutex)
         end
 
-        @pq.push(serialize(data)) if persist
+        @pq.push(@serializer.serialize(data)) if persist
         @mq.push(data)
 
         @non_empty.signal
@@ -81,7 +86,7 @@ module Mmap
             @pq.skip
             data = @mq.shift
             @non_full.signal if @mq.length < @size
-            return data
+            return data #in-memory object, no need to deserialize
           end
           raise(ThreadError, "queue empty") if non_block
 
@@ -125,11 +130,11 @@ module Mmap
     # TBD serialization, with pluggable strategy?
 
     def serialize(data)
-      data
+      @serializer.serialize(data)
     end
 
     def deserialize(data)
-      data
+      @serializer.deserialize(data)
     end
   end
 end
