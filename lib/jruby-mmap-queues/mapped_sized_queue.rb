@@ -125,16 +125,5 @@ module Mmap
       @pq.purge
     end
 
-    private
-
-    # TBD serialization, with pluggable strategy?
-
-    def serialize(data)
-      @serializer.serialize(data)
-    end
-
-    def deserialize(data)
-      @serializer.deserialize(data)
-    end
   end
 end
