@@ -186,6 +186,8 @@ module Mmap
     # @param data [String] write the data string backing bytes to queue
     # @return [Integer] number of data bytes written
     def push(data)
+      return 0 unless data.is_a?(String)
+
       size = data.bytesize
       raise(PagedQueueError, "data size=#{data.bytesize} is larger than usable page size=#{@page_usable_size} (#{@page_size} - #{2 * INT_BYTES})") if size > @page_usable_size
 
