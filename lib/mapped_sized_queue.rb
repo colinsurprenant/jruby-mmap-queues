@@ -33,8 +33,6 @@ module Mmap
 
       # in-memory queue
       @mq = []
-      @num_pop_waiting = 0
-      @num_push_waiting = 0
       @mutex = Mutex.new
       @non_empty = ConditionVariable.new
       @non_full = ConditionVariable.new
@@ -51,48 +49,56 @@ module Mmap
     end
 
     def push(data, persist = true)
-      @mutex.synchronize do
+      @mutex.lock
+      begin
         while true
           break if @mq.length < @size
-          @num_push_waiting += 1
-          begin
-            @non_full.wait(@mutex)
-          ensure
-            @num_push_waiting -= 1
-          end
+          @non_full.wait(@mutex)
         end
 
         @pq.push(serialize(data)) if persist
         @mq.push(data)
 
         @non_empty.signal
+      ensure
+        @mutex.unlock rescue nil
       end
     end
     alias_method :<<, :push
 
-    def pop
-      data = memory_pop
+    def pop(non_block = false)
+      @mutex.lock
+      begin
+        while true
+          unless @mq.empty?
+            @pq.skip
+            data = @mq.shift
+            @non_full.signal if @mq.length < @size
+            return data
+          end
+          raise(ThreadError, "queue empty") if non_block
 
-      @mutex.synchronize do
-        if @mq.length < @size
-          @non_full.signal
+          @non_empty.wait(@mutex)
         end
+      ensure
+        @mutex.unlock rescue nil
       end
-
-      data
     end
     alias_method :shift, :pop
 
     def size
-      @mq.size
+      @mutex.lock
+      begin
+        return @mq.size
+      ensure
+        @mutex.unlock rescue nil
+      end
     end
     alias_method :length, :size
 
     def clear
       @mutex.synchronize do
         @mq = []
-        @num_pop_waiting = 0
-        @num_push_waiting = 0
         @non_full.signal
         @pq.clear
       end
@@ -107,25 +113,6 @@ module Mmap
     end
 
     private
-
-    def memory_pop(non_block = false)
-      @mutex.synchronize do
-        while true
-          unless @mq.empty?
-            @pq.skip
-            return @mq.shift
-          end
-          raise(ThreadError, "queue empty") if non_block
-
-          begin
-            @num_pop_waiting += 1
-            @non_empty.wait(@mutex)
-          ensure
-            @num_pop_waiting -= 1
-          end
-        end
-      end
-    end
 
     # TBD serialization, with pluggable strategy?
 
