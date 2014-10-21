@@ -45,7 +45,12 @@ module Mmap
     end
 
     def empty?
-      @mutex.synchronize{@mq.empty?}
+      @mutex.lock
+      begin
+        return @mq.empty?
+      ensure
+        @mutex.unlock rescue nil
+      end
     end
 
     def push(data, persist = true)
@@ -63,6 +68,8 @@ module Mmap
       ensure
         @mutex.unlock rescue nil
       end
+
+      self
     end
     alias_method :<<, :push
 
@@ -109,6 +116,7 @@ module Mmap
     end
 
     def purge
+      clear
       @pq.purge
     end
 
