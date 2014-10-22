@@ -14,25 +14,23 @@ module Mmap
   # but pops from the in-memory queue.
   class MappedSizedQueue
 
-    # @param fname [String] the queue base file name
+    # @param path [String] the queue base file name
     # @param size [Integer] the queue max size
     # @param options [Hash]
     # @option options [Boolean] :debug, default to false
     # @option options [Boolean] :seralize, serialize to json, default to true
-    def initialize(fname, size, options = {})
+    def initialize(path, size, options = {})
 
       # default options
       options = {
         :debug => false,
-        :page_size => 100 * 1024 * 1024,
-        :manager_class => Mmap::PageCache,
-        :manager_options => {:cache_size => 2},
-        :serializer_class => Mmap::NoSerializer,
+        :page_handler => Mmap::PageCache.new(path),
+        :serializer => Mmap::NoSerializer.new,
       }.merge(options)
 
       raise(ArgumentError, "queue size must be positive") unless size > 0
 
-      @serializer = options.fetch(:serializer_class).new
+      @serializer = options.fetch(:serializer)
 
       @size = size
 
@@ -43,7 +41,7 @@ module Mmap
       @non_full = ConditionVariable.new
 
       # persistent queue
-      @pq = PagedQueue.new(fname, options[:page_size], options[:manager_class], options[:manager_options])
+      @pq = PagedQueue.new(options[:page_handler])
 
       # load existing persistent queue elements into in-memory queue
       @pq.each{|data| push(@serializer.deserialize(data), persist = false)}

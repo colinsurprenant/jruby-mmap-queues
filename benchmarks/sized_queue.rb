@@ -14,7 +14,7 @@ ITEMS = 500_000
 Thread.abort_on_exception = true
 
 Benchmark.bmbm(60) do |b|
-  b.report("SizedQueue, consumers=#{CONSUMERS}, producers=#{PRODUCERS}}") do
+  b.report("SizedQueue, consumers=#{CONSUMERS}, producers=#{PRODUCERS}") do
     queue = SizedQueue.new(20)
 
     consumers = CONSUMERS.times.map do
@@ -39,14 +39,9 @@ Benchmark.bmbm(60) do |b|
 end
 
 Benchmark.bmbm(60) do |b|
-  b.report("MappedSizedQueue/PageCache consumers=#{CONSUMERS}, producers=#{PRODUCERS}}") do
-    queue = Mmap::MappedSizedQueue.new(
-      "cached_mapped_queue_benchmark",
-      20,
-      :serialize => false,
-      :page_size => 20 * 1024 * 1024,
-      :manager_class => Mmap::PageCache,
-      :manager_options => {:cache_size => 2}
+  b.report("MappedSizedQueue/PageCache consumers=#{CONSUMERS}, producers=#{PRODUCERS}") do
+    queue = Mmap::MappedSizedQueue.new("cached_mapped_queue_benchmark", 20,
+      :page_handler => Mmap::PageCache.new("cached_mapped_queue_benchmark", :page_size => 20 * 1024 * 1024, :cache_size => 2)
     )
     queue.clear
     raise unless queue.empty?
@@ -76,14 +71,9 @@ end
 
 
 Benchmark.bmbm(60) do |b|
-  b.report("MappedSizedQueue/SinglePage consumers=#{CONSUMERS}, producers=#{PRODUCERS}}") do
-    queue = Mmap::MappedSizedQueue.new(
-      "single_mapped_queue_benchmark",
-      20,
-      :serialize => false,
-      :page_size => 2048, # since single page ring-buffer style, size only need contains max queue items
-      :manager_class => Mmap::SinglePage,
-      :manager_options => {}
+  b.report("MappedSizedQueue/SinglePage consumers=#{CONSUMERS}, producers=#{PRODUCERS}") do
+    queue = Mmap::MappedSizedQueue.new("single_mapped_queue_benchmark", 20,
+      :page_handler => Mmap::SinglePage.new("single_mapped_queue_benchmark", :page_size => 2048)
     )
     queue.clear
     raise unless queue.empty?

@@ -9,19 +9,17 @@ def purge(base_path)
   end
 end
 
-managers = [
-  {:class => Mmap::PageCache, :options => {:cache_size => 2}},
-  {:class => Mmap::SinglePage, :options => {}},
+page_handlers = [
+  {:class => Mmap::PageCache, :options => {:page_size => KB, :cache_size => 2}},
+  {:class => Mmap::SinglePage, :options => {:page_size => KB}},
 ]
 
-managers.each do |manager|
-  describe "Mmap::PagedQueue/#{manager[:class].to_s}" do
+page_handlers.each do |handler|
+  describe "Mmap::PagedQueue/#{handler[:class].to_s}" do
 
     before(:all) do
       @path = "spec_mmap_queue_file.dat"
       purge(@path)
-      @manager_class = manager[:class]
-      @manager_options = manager[:options]
     end
 
     after(:each) do
@@ -33,7 +31,7 @@ managers.each do |manager|
     end
 
     it "should create new queue" do
-      q = Mmap::PagedQueue.new(@path, MB, @manager_class, @manager_options)
+      q = Mmap::PagedQueue.new(handler[:class].new(@path, handler[:options]))
 
       expect(File.exist?(@path)).to be true
       expect(File.exist?("#{@path}.0")).to be true
@@ -48,7 +46,7 @@ managers.each do |manager|
     end
 
     it "should push/pop" do
-      q = Mmap::PagedQueue.new(@path, MB, @manager_class, @manager_options)
+      q = Mmap::PagedQueue.new(handler[:class].new(@path, handler[:options]))
 
       expect(q.push("hello world")).to eq(11)
       expect(q.pop).to eq("hello world")
@@ -65,7 +63,7 @@ managers.each do |manager|
     end
 
     it "should skip" do
-      q = Mmap::PagedQueue.new(@path, MB, @manager_class, @manager_options)
+      q = Mmap::PagedQueue.new(handler[:class].new(@path, handler[:options]))
 
       expect(q.push("hello")).to eq(5)
       expect(q.push("world")).to eq(5)
@@ -81,13 +79,13 @@ managers.each do |manager|
     end
 
     it "should raise on data bigger than page size" do
-      q = Mmap::PagedQueue.new(@path, 10, @manager_class, @manager_options)
+      q = Mmap::PagedQueue.new(handler[:class].new(@path, handler[:options].merge(:page_size => 10)))
       expect{q.push("hello world")}.to raise_error(Mmap::PagedQueueError)
       q.close
     end
 
     it "should iterate using each" do
-      q = Mmap::PagedQueue.new(@path, KB, @manager_class, @manager_options)
+      q = Mmap::PagedQueue.new(handler[:class].new(@path, handler[:options]))
 
       expect(q.push("hello")).to eq(5)
       expect(q.push("world")).to eq(5)
@@ -129,7 +127,7 @@ managers.each do |manager|
     end
 
     it "should be enumerable" do
-      q = Mmap::PagedQueue.new(@path, KB, @manager_class, @manager_options)
+      q = Mmap::PagedQueue.new(handler[:class].new(@path, handler[:options]))
 
       expect(q.push("hello")).to eq(5)
       expect(q.push("world")).to eq(5)
@@ -143,7 +141,7 @@ managers.each do |manager|
     end
 
     it "should report size" do
-      q = Mmap::PagedQueue.new(@path, KB, @manager_class, @manager_options)
+      q = Mmap::PagedQueue.new(handler[:class].new(@path, handler[:options]))
       expect(q.size).to eq(0)
 
       expect(q.push("hello")).to eq(5)
@@ -177,7 +175,7 @@ managers.each do |manager|
     end
 
     it "should clear queue" do
-      q = Mmap::PagedQueue.new(@path, KB, @manager_class, @manager_options)
+      q = Mmap::PagedQueue.new(handler[:class].new(@path, handler[:options]))
 
       expect(q.push("foo")).to eq(3)
       q.clear
@@ -200,8 +198,6 @@ describe "Mmap::PagedQueue/Mmap::PageCache" do
   before(:all) do
     @path = "spec_mmap_queue_file.dat"
     purge(@path)
-    @manager_class = Mmap::PageCache
-    @manager_options = {:cache_size => 2}
   end
 
   after(:each) do
@@ -209,7 +205,7 @@ describe "Mmap::PagedQueue/Mmap::PageCache" do
   end
 
   it "should create new pages" do
-    q = Mmap::PagedQueue.new(@path, 16, @manager_class, @manager_options)
+    q = Mmap::PagedQueue.new(Mmap::PageCache.new(@path, :page_size => 16, :cache_size => 2))
     expect(q.page_usable_size).to eq(8)
 
     expect(q.meta.head_page_index).to eq(0)
@@ -238,7 +234,7 @@ describe "Mmap::PagedQueue/Mmap::PageCache" do
   end
 
   it "should purge page files" do
-    q = Mmap::PagedQueue.new(@path, 16, @manager_class, @manager_options)
+    q = Mmap::PagedQueue.new(Mmap::PageCache.new(@path, :page_size => 16, :cache_size => 2))
     expect(q.page_usable_size).to eq(8)
 
     expect(File.exist?(@path)).to be true
@@ -271,8 +267,6 @@ describe "Mmap::PagedQueue/Mmap::SinglePage" do
   before(:all) do
     @path = "spec_mmap_queue_file.dat"
     purge(@path)
-    @manager_class = Mmap::SinglePage
-    @manager_options = {}
   end
 
   after(:each) do
@@ -280,7 +274,7 @@ describe "Mmap::PagedQueue/Mmap::SinglePage" do
   end
 
   it "should not create new pages" do
-    q = Mmap::PagedQueue.new(@path, 16, @manager_class, @manager_options)
+    q = Mmap::PagedQueue.new(Mmap::SinglePage.new(@path, :page_size => 16))
     expect(q.page_usable_size).to eq(8)
 
     expect(q.meta.head_page_index).to eq(0)
@@ -309,7 +303,7 @@ describe "Mmap::PagedQueue/Mmap::SinglePage" do
   end
 
   it "should purge one page" do
-    q = Mmap::PagedQueue.new(@path, 16, @manager_class, @manager_options)
+    q = Mmap::PagedQueue.new(Mmap::SinglePage.new(@path, :page_size => 16))
     expect(q.page_usable_size).to eq(8)
 
     expect(File.exist?(@path)).to be true
@@ -338,7 +332,7 @@ describe "Mmap::PagedQueue/Mmap::SinglePage" do
 
   it "should reuse same page as in a ring buffer" do
     # for a 5 1-byte items the queue must be of size (6 x (1 + 4)) + 4
-    q = Mmap::PagedQueue.new(@path, 34, @manager_class, @manager_options)
+    q = Mmap::PagedQueue.new(Mmap::SinglePage.new(@path, :page_size => 34))
     10.times do
       expect(q.push("a")).to eq(1)
       expect(q.push("b")).to eq(1)

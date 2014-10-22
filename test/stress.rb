@@ -18,24 +18,14 @@ SOURCE = ITEMS.times.map{|i| "somedata #" + ("%07d" % i)}
   definitions = [
     {
       :name => "MappedSizedQueue/PageCache",
-      :queue => Mmap::MappedSizedQueue.new(
-        "cached_mapped_queue_benchmark",
-        20,
-        :serialize => false,
-        :page_size => 20 * 1024 * 1024,
-        :manager_class => Mmap::PageCache,
-        :manager_options => {:cache_size => 2}
+      :queue => Mmap::MappedSizedQueue.new("cached_mapped_queue_benchmark", 20,
+        :page_handler => Mmap::PageCache.new("cached_mapped_queue_benchmark", :page_size => 20 * 1024 * 1024, :cache_size => 2)
       )
     },
     {
       :name => "MappedSizedQueue/SinglePage",
-      :queue => Mmap::MappedSizedQueue.new(
-        "single_mapped_queue_benchmark",
-        20,
-        :serialize => false,
-        :page_size => 2048, # since single page ring-buffer style, size only need contains max queue items
-        :manager_class => Mmap::SinglePage,
-        :manager_options => {}
+      :queue => Mmap::MappedSizedQueue.new("single_mapped_queue_benchmark", 20,
+        :page_handler => Mmap::SinglePage.new("single_mapped_queue_benchmark", :page_size => 2048)
       )
     }
   ]

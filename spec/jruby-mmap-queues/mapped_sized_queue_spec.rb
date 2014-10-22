@@ -6,13 +6,13 @@ def purge(base_path)
   end
 end
 
-managers = [
-  {:manager_class => Mmap::PageCache, :manager_options => {:cache_size => 2}},
-  {:manager_class => Mmap::SinglePage, :manager_options => {}},
+handlers = [
+  {:class => Mmap::PageCache, :options => {:page_size => 1024, :cache_size => 2}},
+  {:class => Mmap::SinglePage, :options => {:page_size => 1024}},
 ]
 
-managers.each do |manager|
-  describe "Mmap::MappedSizedQueue/#{manager[:class].to_s}" do
+handlers.each do |handler|
+  describe "Mmap::MappedSizedQueue/#{handler[:class].to_s}" do
 
     before(:all) do
       @path = "spec_mapped_sized_queue_file.dat"
@@ -31,14 +31,14 @@ managers.each do |manager|
     end
 
     it "should create new empty queue" do
-      q = Mmap::MappedSizedQueue.new(@path, 10, manager)
+      q = Mmap::MappedSizedQueue.new(@path, 10, :page_handler => handler[:class].new(@path, handler[:options]))
       expect(q.size).to eq(0)
       expect(q.empty?).to be true
       q.close
     end
 
     it "should push and pop" do
-      q = Mmap::MappedSizedQueue.new(@path, 10, manager)
+      q = Mmap::MappedSizedQueue.new(@path, 10, :page_handler => handler[:class].new(@path, handler[:options]))
       q.push("foo")
       q.push("bar")
       expect(q.size).to eq(2)
@@ -53,7 +53,7 @@ managers.each do |manager|
     end
 
     it "should reload existing persistent queue" do
-      q = Mmap::MappedSizedQueue.new(@path, 10, manager)
+      q = Mmap::MappedSizedQueue.new(@path, 10, :page_handler => handler[:class].new(@path, handler[:options]))
       expect(q.size).to eq(0)
       expect(q.empty?).to be true
       q.push("foo")
@@ -62,7 +62,7 @@ managers.each do |manager|
       expect(q.empty?).to be false
       q.close
 
-      q = Mmap::MappedSizedQueue.new(@path, 10, manager)
+      q = Mmap::MappedSizedQueue.new(@path, 10, :page_handler => handler[:class].new(@path, handler[:options]))
       expect(q.size).to eq(2)
       expect(q.empty?).to be false
 
@@ -72,7 +72,7 @@ managers.each do |manager|
       expect(q.empty?).to be true
       q.close
 
-      q = Mmap::MappedSizedQueue.new(@path, 10, manager)
+      q = Mmap::MappedSizedQueue.new(@path, 10, :page_handler => handler[:class].new(@path, handler[:options]))
       expect(q.size).to eq(0)
       expect(q.empty?).to be true
       q.close

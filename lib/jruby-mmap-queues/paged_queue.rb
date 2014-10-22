@@ -6,11 +6,18 @@ module Mmap
 
   # simple caching page manager
   class PageCache
+    attr_reader :page_size, :page_path
 
-    def initialize(page_base_fname, page_size, options = {})
+    def initialize(page_path, options = {})
+      # default options
+      options = {
+        :page_size => 100 * 1024 * 1024,
+        :cache_size => 2,
+      }.merge(options)
+
       @cache_size = options.fetch(:cache_size)
-      @page_base_fname = page_base_fname
-      @page_size = page_size
+      @page_path = page_path
+      @page_size = options.fetch(:page_size)
       @cache = {}
       @num_pages = 0
     end
@@ -24,7 +31,7 @@ module Mmap
     end
 
     def path(index)
-      "#{@page_base_fname}.#{index}"
+      "#{@page_path}.#{index}"
     end
 
     private
@@ -47,14 +54,21 @@ module Mmap
   # managers
 
   class SinglePage
+    attr_reader :page_size, :page_path
 
-    def initialize(page_base_fname, page_size, options = {})
-      @page_base_fname = page_base_fname
-      @page_size = page_size
+    def initialize(page_path, options = {})
+      # default options
+      options = {
+        :page_size => 100 * 1024 * 1024,
+      }.merge(options)
+
+      @page_path = page_path
+      @page_size = options.fetch(:page_size)
       @page = Mmap::ByteBuffer.new(path, @page_size)
     end
 
     def page(index)
+      # single page is always same page, ignore index
       @page
     end
 
@@ -63,7 +77,8 @@ module Mmap
     end
 
     def path(index = 0)
-      "#{@page_base_fname}.#{0}"
+      # single page is always page 0, ignore index
+      "#{@page_path}.0"
     end
   end
 
@@ -170,17 +185,15 @@ module Mmap
     # page management strategies, for example, in a sized queue we may want to reuse
     # pages as in a circular buffer since we know the queue size is limited
 
-    def initialize(fname, page_size, page_manager, options = {})
-      @fname = fname
-      @page_size = page_size
-      @page_usable_size = @page_size - (2 * INT_BYTES)
+    def initialize(page_handler, options = {})
+      @page_handler = page_handler
+      @page_usable_size = @page_handler.page_size - (2 * INT_BYTES)
 
-      @meta = MappedMetadata.new(@fname)
-      @pages = page_manager.new(@fname, @page_size, options)
+      @meta = MappedMetadata.new(@page_handler.page_path)
 
       # prime the cache with tail & head pages
-      @pages.page(@meta.head_page_index)
-      @pages.page(@meta.tail_page_index)
+      @page_handler.page(@meta.head_page_index)
+      @page_handler.page(@meta.tail_page_index)
     end
 
     # @param data [String] write the data string backing bytes to queue
@@ -189,7 +202,7 @@ module Mmap
       return 0 unless data.is_a?(String)
 
       size = data.bytesize
-      raise(PagedQueueError, "data size=#{data.bytesize} is larger than usable page size=#{@page_usable_size} (#{@page_size} - #{2 * INT_BYTES})") if size > @page_usable_size
+      raise(PagedQueueError, "data size=#{data.bytesize} is larger than usable page size=#{@page_usable_size} (#{@page_handler.page_size} - #{2 * INT_BYTES})") if size > @page_usable_size
 
       offset = @meta.head_page_offset
       if size > (@page_usable_size - offset)
@@ -197,7 +210,7 @@ module Mmap
         @meta.head_page_index += 1
         @meta.head_page_offset = offset = 0
       end
-      page = @pages.page(@meta.head_page_index)
+      page = @page_handler.page(@meta.head_page_index)
       page.position = offset
       page.put_int(size)
       page.put_bytes(data)
@@ -233,7 +246,7 @@ module Mmap
       while true
         return if index >= @meta.head_page_index && offset >= @meta.head_page_offset
 
-        page = @pages.page(index)
+        page = @page_handler.page(index)
         page.position = offset
 
         if (size = page.get_int) == 0
@@ -242,7 +255,7 @@ module Mmap
           index += 1
           return if index >= @meta.head_page_index && offset >= @meta.head_page_offset
 
-          page = @pages.page(index)
+          page = @page_handler.page(index)
           page.position = offset
           size = page.get_int
         end
@@ -265,15 +278,15 @@ module Mmap
 
     # close queue and delete all page files
     def purge
-      files = (0..@meta.head_page_index).map{|index| @pages.path(index)}
+      files = (0..@meta.head_page_index).map{|index| @page_handler.path(index)}
       close
-      File.delete(@fname) if File.exist?(@fname)
+      File.delete(@page_handler.page_path) if File.exist?(@page_handler.page_path)
       files.each{|f| File.delete(f) if File.exist?(f)}
     end
 
     def close
       @meta.close
-      @pages.close
+      @page_handler.close
     end
 
     private
@@ -285,7 +298,7 @@ module Mmap
       index = @meta.tail_page_index
       return nil if index >= @meta.head_page_index && offset >= @meta.head_page_offset
 
-      page = @pages.page(index)
+      page = @page_handler.page(index)
       page.position = offset
 
       if (size = page.get_int) == 0
@@ -294,7 +307,7 @@ module Mmap
         index = @meta.tail_page_index += 1
         return nil if index >= @meta.head_page_index && offset >= @meta.head_page_offset
 
-        page = @pages.page(index)
+        page = @page_handler.page(index)
         page.position = offset
         size = page.get_int
       end
