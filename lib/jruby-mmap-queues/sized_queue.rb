@@ -9,10 +9,10 @@ module Mmap
     def deserialize(data); data end
   end
 
-  # MappedSizedQueue blocking thread-safe sized queue
+  # SizedQueue blocking thread-safe sized queue
   # uses both an in-memory queue and a persistent queue and pushes to both
   # but pops from the in-memory queue.
-  class MappedSizedQueue
+  class SizedQueue
 
     # @param path [String] the queue base file name
     # @param size [Integer] the queue max size

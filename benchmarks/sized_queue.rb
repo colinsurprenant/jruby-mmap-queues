@@ -39,8 +39,8 @@ Benchmark.bmbm(60) do |b|
 end
 
 Benchmark.bmbm(60) do |b|
-  b.report("MappedSizedQueue/PageCache consumers=#{CONSUMERS}, producers=#{PRODUCERS}") do
-    queue = Mmap::MappedSizedQueue.new("cached_mapped_queue_benchmark", 20,
+  b.report("Mmap::SizedQueue/PageCache consumers=#{CONSUMERS}, producers=#{PRODUCERS}") do
+    queue = Mmap::SizedQueue.new("cached_mapped_queue_benchmark", 20,
       :page_handler => Mmap::PageCache.new("cached_mapped_queue_benchmark", :page_size => 20 * 1024 * 1024, :cache_size => 2)
     )
     queue.clear
@@ -71,8 +71,8 @@ end
 
 
 Benchmark.bmbm(60) do |b|
-  b.report("MappedSizedQueue/SinglePage consumers=#{CONSUMERS}, producers=#{PRODUCERS}") do
-    queue = Mmap::MappedSizedQueue.new("single_mapped_queue_benchmark", 20,
+  b.report("Mmap::SizedQueue/SinglePage consumers=#{CONSUMERS}, producers=#{PRODUCERS}") do
+    queue = Mmap::SizedQueue.new("single_mapped_queue_benchmark", 20,
       :page_handler => Mmap::SinglePage.new("single_mapped_queue_benchmark", :page_size => 2048)
     )
     queue.clear
