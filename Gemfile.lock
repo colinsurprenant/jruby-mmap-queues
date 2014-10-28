@@ -1,13 +1,13 @@
 PATH
   remote: .
   specs:
-    jruby-mmap-queues (0.1.0-java)
+    jruby-mmap-queues (0.1.1-java)
       jruby-mmap
 
 PATH
   remote: /Users/colin/dev/src/elasticsearch/jruby-mmap
   specs:
-    jruby-mmap (0.1.0-java)
+    jruby-mmap (0.1.1-java)
 
 GEM
   remote: https://rubygems.org/
