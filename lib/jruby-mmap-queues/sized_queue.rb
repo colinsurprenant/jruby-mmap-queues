@@ -59,17 +59,14 @@ module Mmap
     def push(data, persist = true)
       @mutex.lock
       begin
-        while true
-          if @mq.size < @size
-            @pq.push(@serializer.serialize(data)) if persist
-            @mq.push(data)
+        # must always verify actual condition upon waking up from condition variable
+        # since it is possible for thread to wake up for other reasons
+        @non_full.wait(@mutex) while @mq.size >= @size
+        @pq.push(@serializer.serialize(data)) if persist
+        @mq.push(data)
+        @non_empty.signal
 
-            @non_empty.signal
-            return self
-          end
-
-          @non_full.wait(@mutex)
-        end
+        return self
       ensure
         @mutex.unlock #rescue nil
       end
@@ -88,6 +85,8 @@ module Mmap
           end
           raise(ThreadError, "queue empty") if non_block
 
+          # must always verify actual condition upon waking up from condition variable
+          # since it is possible for thread to wake up for other reasons
           @non_empty.wait(@mutex)
         end
       ensure
@@ -109,8 +108,8 @@ module Mmap
     def clear
       @mutex.synchronize do
         @mq = []
-        @non_full.signal
         @pq.clear
+        @non_full.signal
       end
     end
 
