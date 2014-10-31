@@ -31,16 +31,17 @@ page_handlers.each do |handler|
     end
 
     it "should create new queue" do
-      q = Mmap::PagedQueue.new(handler[:class].new(@path, handler[:options]))
+      page_handler = handler[:class].new(@path, handler[:options])
+      q = Mmap::PagedQueue.new(page_handler)
 
       expect(File.exist?(@path)).to be true
       expect(File.exist?("#{@path}.0")).to be true
 
-      expect(q.meta.head_page_index).to eq(0)
-      expect(q.meta.head_page_offset).to eq(0)
-      expect(q.meta.tail_page_index).to eq(0)
-      expect(q.meta.tail_page_offset).to eq(0)
-      expect(q.meta.size).to eq(0)
+      expect(page_handler.meta.head_page_index).to eq(0)
+      expect(page_handler.meta.head_page_offset).to eq(0)
+      expect(page_handler.meta.tail_page_index).to eq(0)
+      expect(page_handler.meta.tail_page_offset).to eq(0)
+      expect(page_handler.meta.size).to eq(0)
 
       q.close
     end
@@ -80,7 +81,7 @@ page_handlers.each do |handler|
 
     it "should raise on data bigger than page size" do
       q = Mmap::PagedQueue.new(handler[:class].new(@path, handler[:options].merge(:page_size => 10)))
-      expect{q.push("hello world")}.to raise_error(Mmap::PagedQueueError)
+      expect{q.push("hello world")}.to raise_error(Mmap::PageHandlerError)
       q.close
     end
 
@@ -175,15 +176,16 @@ page_handlers.each do |handler|
     end
 
     it "should clear queue" do
-      q = Mmap::PagedQueue.new(handler[:class].new(@path, handler[:options]))
+      page_handler = handler[:class].new(@path, handler[:options])
+      q = Mmap::PagedQueue.new(page_handler)
 
       expect(q.push("foo")).to eq(3)
       q.clear
-      expect(q.meta.head_page_index).to eq(0)
-      expect(q.meta.head_page_offset).to eq(0)
-      expect(q.meta.tail_page_index).to eq(0)
-      expect(q.meta.tail_page_offset).to eq(0)
-      expect(q.meta.size).to eq(0)
+      expect(page_handler.meta.head_page_index).to eq(0)
+      expect(page_handler.meta.head_page_offset).to eq(0)
+      expect(page_handler.meta.tail_page_index).to eq(0)
+      expect(page_handler.meta.tail_page_offset).to eq(0)
+      expect(page_handler.meta.size).to eq(0)
 
       expect(q.push("bar")).to eq(3)
       expect(q.pop).to eq("bar")
@@ -205,37 +207,39 @@ describe "Mmap::PagedQueue/Mmap::PageCache" do
   end
 
   it "should create new pages" do
-    q = Mmap::PagedQueue.new(Mmap::PageCache.new(@path, :page_size => 16, :cache_size => 2))
-    expect(q.page_usable_size).to eq(8)
+    page_handler = Mmap::PageCache.new(@path, :page_size => 16, :cache_size => 2)
+    q = Mmap::PagedQueue.new(page_handler)
+    expect(page_handler.page_usable_size).to eq(8)
 
-    expect(q.meta.head_page_index).to eq(0)
-    expect(q.meta.head_page_offset).to eq(0)
-    expect(q.meta.tail_page_index).to eq(0)
-    expect(q.meta.tail_page_offset).to eq(0)
-    expect(q.meta.size).to eq(0)
+    expect(page_handler.meta.head_page_index).to eq(0)
+    expect(page_handler.meta.head_page_offset).to eq(0)
+    expect(page_handler.meta.tail_page_index).to eq(0)
+    expect(page_handler.meta.tail_page_offset).to eq(0)
+    expect(page_handler.meta.size).to eq(0)
 
     expect(File.exist?(@path)).to be true
     expect(File.exist?("#{@path}.0")).to be true
     expect(File.exist?("#{@path}.1")).to be false
 
     q.push("hello")
-    expect(q.meta.head_page_index).to eq(0)
+    expect(page_handler.meta.head_page_index).to eq(0)
     expect(File.exist?("#{@path}.1")).to be false
 
     q.push("world")
-    expect(q.meta.head_page_index).to eq(1)
+    expect(page_handler.meta.head_page_index).to eq(1)
     expect(File.exist?("#{@path}.1")).to be true
 
     q.push("foobar")
-    expect(q.meta.head_page_index).to eq(2)
+    expect(page_handler.meta.head_page_index).to eq(2)
     expect(File.exist?("#{@path}.2")).to be true
 
     q.close
   end
 
   it "should purge page files" do
-    q = Mmap::PagedQueue.new(Mmap::PageCache.new(@path, :page_size => 16, :cache_size => 2))
-    expect(q.page_usable_size).to eq(8)
+    page_handler = Mmap::PageCache.new(@path, :page_size => 16, :cache_size => 2)
+    q = Mmap::PagedQueue.new(page_handler)
+    expect(page_handler.page_usable_size).to eq(8)
 
     expect(File.exist?(@path)).to be true
     expect(File.exist?("#{@path}.0")).to be true
@@ -274,37 +278,40 @@ describe "Mmap::PagedQueue/Mmap::SinglePage" do
   end
 
   it "should not create new pages" do
-    q = Mmap::PagedQueue.new(Mmap::SinglePage.new(@path, :page_size => 16))
-    expect(q.page_usable_size).to eq(8)
+    page_handler = Mmap::SinglePage.new(@path, :page_size => 16)
+    q = Mmap::PagedQueue.new(page_handler)
+    expect(page_handler.page_usable_size).to eq(8)
 
-    expect(q.meta.head_page_index).to eq(0)
-    expect(q.meta.head_page_offset).to eq(0)
-    expect(q.meta.tail_page_index).to eq(0)
-    expect(q.meta.tail_page_offset).to eq(0)
-    expect(q.meta.size).to eq(0)
+    expect(page_handler.meta.head_page_index).to eq(0)
+    expect(page_handler.meta.head_page_offset).to eq(0)
+    expect(page_handler.meta.tail_page_index).to eq(0)
+    expect(page_handler.meta.tail_page_offset).to eq(0)
+    expect(page_handler.meta.size).to eq(0)
 
     expect(File.exist?(@path)).to be true
     expect(File.exist?("#{@path}.0")).to be true
     expect(File.exist?("#{@path}.1")).to be false
 
     q.push("hello")
-    expect(q.meta.head_page_index).to eq(0)
+    expect(page_handler.meta.head_page_index).to eq(0)
     expect(File.exist?("#{@path}.1")).to be false
 
     q.push("world")
-    expect(q.meta.head_page_index).to eq(1)
+    expect(page_handler.meta.head_page_index).to eq(1)
     expect(File.exist?("#{@path}.1")).to be false
 
     q.push("foobar")
-    expect(q.meta.head_page_index).to eq(2)
+    expect(page_handler.meta.head_page_index).to eq(2)
     expect(File.exist?("#{@path}.2")).to be false
 
     q.close
   end
 
   it "should purge one page" do
-    q = Mmap::PagedQueue.new(Mmap::SinglePage.new(@path, :page_size => 16))
-    expect(q.page_usable_size).to eq(8)
+    page_handler = Mmap::SinglePage.new(@path, :page_size => 16)
+    q = Mmap::PagedQueue.new(page_handler)
+
+    expect(page_handler.page_usable_size).to eq(8)
 
     expect(File.exist?(@path)).to be true
     expect(File.exist?("#{@path}.0")).to be true

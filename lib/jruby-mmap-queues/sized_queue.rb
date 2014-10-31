@@ -8,6 +8,7 @@ module Mmap
     def serialize(data); data end
     def deserialize(data); data end
   end
+  NO_SERIALIZER = NoSerializer.new
 
   # SizedQueue blocking thread-safe sized queue
   # uses both an in-memory queue and a persistent queue and pushes to both
@@ -20,12 +21,10 @@ module Mmap
     # @option options [Boolean] :debug, default to false
     # @option options [Boolean] :seralize, serialize to json, default to true
     def initialize(path, size, options = {})
-
       # default options
       options = {
         :debug => false,
-        :page_handler => Mmap::PageCache.new(path),
-        :serializer => Mmap::NoSerializer.new,
+        :serializer => NO_SERIALIZER,
       }.merge(options)
 
       raise(ArgumentError, "queue size must be positive") unless size > 0
@@ -41,7 +40,7 @@ module Mmap
       @non_full = ConditionVariable.new
 
       # persistent queue
-      @pq = PagedQueue.new(options[:page_handler])
+      @pq = PagedQueue.new(options[:page_handler] || Mmap::PageCache.new(path))
 
       # load existing persistent queue elements into in-memory queue
       @pq.each{|data| push(@serializer.deserialize(data), persist = false)}
