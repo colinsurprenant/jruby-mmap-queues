@@ -4,7 +4,7 @@ raise("JRuby required") unless defined?(JRUBY_VERSION)
 
 Gem::Specification.new do |s|
   s.name = "jruby-mmap-queues"
-  s.version = "0.1.1"
+  s.version = "0.2.0"
   s.authors = ["Colin Surprenant"]
   s.date = Time.now.strftime('%Y-%m-%d')
   s.summary = "JRuby persistent queues using Java NIO Mmap"
