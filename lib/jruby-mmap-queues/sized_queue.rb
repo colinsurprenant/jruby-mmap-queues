@@ -119,7 +119,6 @@ module Mmap
     end
 
     def purge
-      clear
       @pq.purge
     end
 
