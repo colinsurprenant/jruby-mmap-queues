@@ -192,6 +192,20 @@ page_handlers.each do |handler|
 
       q.close
     end
+
+    it "should support closing and purging" do
+      page_handler = handler[:class].new(@path, handler[:options])
+      q = Mmap::PagedQueue.new(page_handler)
+
+      expect(File.exist?(@path)).to be true
+      expect(File.exist?("#{@path}.0")).to be true
+
+      q.close
+      q.purge
+
+      expect(File.exist?(@path)).to be false
+      expect(File.exist?("#{@path}.0")).to be false
+    end
   end
 end
 
@@ -231,6 +245,47 @@ describe "Mmap::PagedQueue/Mmap::PageCache" do
 
     q.push("foobar")
     expect(page_handler.meta.head_page_index).to eq(2)
+    expect(File.exist?("#{@path}.2")).to be true
+
+    q.close
+  end
+
+  it "should purge unused pages" do
+    page_handler = Mmap::PageCache.new(@path, :page_size => 16, :cache_size => 2)
+    q = Mmap::PagedQueue.new(page_handler)
+    expect(page_handler.page_usable_size).to eq(8)
+
+    expect(page_handler.meta.size).to eq(0)
+
+    expect(File.exist?(@path)).to be true
+    expect(File.exist?("#{@path}.0")).to be true
+    expect(File.exist?("#{@path}.1")).to be false
+
+    q.push("hello")
+    expect(page_handler.meta.head_page_index).to eq(0)
+    expect(File.exist?("#{@path}.1")).to be false
+
+    q.push("world")
+    expect(page_handler.meta.head_page_index).to eq(1)
+    expect(File.exist?("#{@path}.1")).to be true
+
+    q.push("foobar")
+    expect(page_handler.meta.head_page_index).to eq(2)
+    expect(File.exist?("#{@path}.2")).to be true
+
+    expect(q.pop).to eq("hello")
+    # no yet purged because tail pointer is still at end of "hello" on page 0
+    # and will move to page 1 on next pop by reading trailing 0x0
+    expect(File.exist?("#{@path}.0")).to be true
+
+    expect(q.pop).to eq("world")
+    expect(File.exist?("#{@path}.0")).to be false
+    expect(File.exist?("#{@path}.1")).to be true
+    expect(File.exist?("#{@path}.2")).to be true
+
+    expect(q.pop).to eq("foobar")
+    expect(File.exist?("#{@path}.0")).to be false
+    expect(File.exist?("#{@path}.1")).to be false
     expect(File.exist?("#{@path}.2")).to be true
 
     q.close
@@ -339,7 +394,8 @@ describe "Mmap::PagedQueue/Mmap::SinglePage" do
 
   it "should reuse same page as in a ring buffer" do
     # for a 5 1-byte items the queue must be of size (6 x (1 + 4)) + 4
-    q = Mmap::PagedQueue.new(Mmap::SinglePage.new(@path, :page_size => 34))
+    page_handler = Mmap::SinglePage.new(@path, :page_size => 34)
+    q = Mmap::PagedQueue.new(page_handler)
     10.times do
       expect(q.push("a")).to eq(1)
       expect(q.push("b")).to eq(1)
@@ -374,4 +430,60 @@ describe "Mmap::PagedQueue/Mmap::SinglePage" do
       expect(q.size).to eq(0)
     end
   end
+
+  # TODO: implement & this this
+  #
+  # it "should block when queue data is full?" do
+  #   # for a 5 1-byte items the queue must be of size (6 x (1 + 4)) + 4
+  #   page_handler = Mmap::SinglePage.new(@path, :page_size => 34)
+  #   q = Mmap::PagedQueue.new(page_handler)
+
+  #   expect(q.push("a")).to eq(1)
+  #   expect(q.push("b")).to eq(1)
+  #   expect(q.push("c")).to eq(1)
+  #   expect(q.push("d")).to eq(1)
+  #   expect(q.push("e")).to eq(1)
+  #   expect(q.push("f")).to eq(1)
+  #   expect(page_handler.meta.head_page_index).to eq(0)
+
+  #   # how to test that the next push should block?
+  #   expect(q.push("g")).to eq(1)
+  # end
+
+
+  it "should not purge single page when reusing" do
+    # for a 5 1-byte items the queue must be of size (6 x (1 + 4)) + 4
+    page_handler = Mmap::SinglePage.new(@path, :page_size => 34)
+    q = Mmap::PagedQueue.new(page_handler)
+
+    expect(q.push("a")).to eq(1)
+    expect(q.push("b")).to eq(1)
+    expect(q.push("c")).to eq(1)
+    expect(q.push("d")).to eq(1)
+    expect(q.push("e")).to eq(1)
+    expect(q.push("f")).to eq(1)
+    expect(page_handler.meta.head_page_index).to eq(0)
+
+    expect(q.pop).to eq("a")
+    expect(q.pop).to eq("b")
+    expect(q.push("g")).to eq(1)
+    expect(page_handler.meta.head_page_index).to eq(1)
+
+    expect(q.pop).to eq("c")
+    expect(q.push("h")).to eq(1)
+    expect(page_handler.meta.head_page_index).to eq(1)
+
+    expect(q.pop).to eq("d")
+    expect(q.pop).to eq("e")
+    expect(q.pop).to eq("f")
+    expect(File.exist?("#{@path}.0")).to be true
+    expect(page_handler.meta.tail_page_index).to eq(0)
+    expect(q.pop).to eq("g")
+    expect(page_handler.meta.tail_page_index).to eq(1)
+    expect(File.exist?("#{@path}.0")).to be true
+
+    expect(q.pop).to eq("h")
+    expect(q.pop).to be nil
+  end
+
 end

@@ -2,17 +2,13 @@
 
 require "jruby-mmap"
 
-# TODO
-# spec purge usused
-# sped each then followed by read to test cursor
-#
-
 module Mmap
 
   INT_BYTES = 4
   LONG_BYTES = 8
 
   # Cursor is a non persisted version of MappedMetadata to support non tail updating reads
+  # TODO: should we have a better class model with MappedMetadata?
   class Cursor
     attr_accessor :head_page_index, :head_page_offset, :tail_page_index, :tail_page_offset, :size
 
@@ -108,6 +104,8 @@ module Mmap
 
   class PageHandlerError < StandardError; end
 
+  # PageHandler is a base class which implements the basic reading & writing logic and must be extended to
+  # minimally implement the mmap_buffer. See PageCache and SinglePage handlers
   class PageHandler
     attr_reader :meta, :page_usable_size
 
@@ -217,6 +215,7 @@ module Mmap
       page_indexes.each{|i| purge_page_index(i)}
     end
 
+    # if overriding, my sure to call super() so that @meta et closed
     def close
       @meta.close
     end
@@ -225,7 +224,7 @@ module Mmap
 
     EOQ = [nil, 0].freeze
 
-    # retrieve the buffer set at the next read position
+    # retrieve the page buffer set for the next read position
     # @param meta [MappedMetadata|Cursor] queue meta information, pass a Cursor for non queue updating reads
     # @return 2-tuple [Mmap::ByteBuffer, Integer] with the buffer positioned at the next read location and the next read size
     def next_read(meta)
@@ -238,8 +237,9 @@ module Mmap
 
       if (size = buffer.get_int) == 0
         # we hit the trailing zero that indicates the end of data on this page
+        # this tail page is now unsused and we will move to the next one
         offset = meta.tail_page_offset = 0
-        purge_page_index(meta.tail_page_index)
+        purge_unused_page_index(meta.tail_page_index)
         index = meta.tail_page_index += 1
         return EOQ if index >= meta.head_page_index && offset >= meta.head_page_offset
 
