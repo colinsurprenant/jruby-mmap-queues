@@ -5,8 +5,8 @@ require "jruby-mmap-queues/paged_queue"
 
 module Mmap
   class NoSerializer
-    def serialize(data); data end
-    def deserialize(data); data end
+    def serialize(data); data; end
+    def deserialize(data); data; end
   end
   NO_SERIALIZER = NoSerializer.new
 
@@ -15,14 +15,16 @@ module Mmap
   # but pops from the in-memory queue.
   class SizedQueue
 
-    # @param path [String] the queue base file name
     # @param size [Integer] the queue max size
     # @param options [Hash]
+    # @option options [PageHandler] :page_handler, page handler object, defaults to Mmap::PageCache
+    # @option options [String] :path, queue file path when not specifying a :page_handler. defaults to "sized_queue.dat"
     # @option options [Boolean] :debug, default to false
-    # @option options [Boolean] :seralize, serialize to json, default to true
-    def initialize(path, size, options = {})
+    # @option options [Object] :seralizer, persistence serialization object, defaults to NoSerializer
+    def initialize(size, options = {})
       # default options
       options = {
+        :path => "sized_queue.dat", # default path when no page handler is specified
         :debug => false,
         :serializer => NO_SERIALIZER,
       }.merge(options)
@@ -39,8 +41,8 @@ module Mmap
       @non_empty = ConditionVariable.new
       @non_full = ConditionVariable.new
 
-      # persistent queue
-      @pq = PagedQueue.new(options[:page_handler] || Mmap::PageCache.new(path))
+      # persistent queue, use :page_handler option or by default Mmap::PageCache + :path option
+      @pq = PagedQueue.new(options[:page_handler] || Mmap::PageCache.new(options[:path]))
 
       # load existing persistent queue elements into in-memory queue
       @pq.each{|data| push(@serializer.deserialize(data), persist = false)}

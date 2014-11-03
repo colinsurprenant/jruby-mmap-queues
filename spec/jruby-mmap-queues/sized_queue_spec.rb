@@ -31,14 +31,14 @@ handlers.each do |handler|
     end
 
     it "should create new empty queue" do
-      q = Mmap::SizedQueue.new(@path, 10, :page_handler => handler[:class].new(@path, handler[:options]))
+      q = Mmap::SizedQueue.new(10, :page_handler => handler[:class].new(@path, handler[:options]))
       expect(q.size).to eq(0)
       expect(q.empty?).to be true
       q.close
     end
 
     it "should push and pop" do
-      q = Mmap::SizedQueue.new(@path, 10, :page_handler => handler[:class].new(@path, handler[:options]))
+      q = Mmap::SizedQueue.new(10, :page_handler => handler[:class].new(@path, handler[:options]))
       q.push("foo")
       q.push("bar")
       expect(q.size).to eq(2)
@@ -53,7 +53,7 @@ handlers.each do |handler|
     end
 
     it "should reload existing persistent queue" do
-      q = Mmap::SizedQueue.new(@path, 10, :page_handler => handler[:class].new(@path, handler[:options]))
+      q = Mmap::SizedQueue.new(10, :page_handler => handler[:class].new(@path, handler[:options]))
       expect(q.size).to eq(0)
       expect(q.empty?).to be true
       q.push("foo")
@@ -62,7 +62,7 @@ handlers.each do |handler|
       expect(q.empty?).to be false
       q.close
 
-      q = Mmap::SizedQueue.new(@path, 10, :page_handler => handler[:class].new(@path, handler[:options]))
+      q = Mmap::SizedQueue.new(10, :page_handler => handler[:class].new(@path, handler[:options]))
       expect(q.size).to eq(2)
       expect(q.empty?).to be false
 
@@ -72,7 +72,7 @@ handlers.each do |handler|
       expect(q.empty?).to be true
       q.close
 
-      q = Mmap::SizedQueue.new(@path, 10, :page_handler => handler[:class].new(@path, handler[:options]))
+      q = Mmap::SizedQueue.new(10, :page_handler => handler[:class].new(@path, handler[:options]))
       expect(q.size).to eq(0)
       expect(q.empty?).to be true
       q.close
