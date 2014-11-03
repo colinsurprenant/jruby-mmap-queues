@@ -6,8 +6,9 @@ require "jruby-mmap-queues"
 
 Thread.abort_on_exception = true
 
-ITEMS = 500_000
+ITEMS = 1_000_000
 SOURCE = ITEMS.times.map{|i| "somedata #" + ("%07d" % i)}
+PAGE_SIZE = 1 * 1024 * 1024
 
 [[1, 4], [4, 1], [4, 4]].each do |consumers_count, producers_count|
 
@@ -18,15 +19,11 @@ SOURCE = ITEMS.times.map{|i| "somedata #" + ("%07d" % i)}
   definitions = [
     {
       :name => "SizedQueue/PageCache",
-      :queue => Mmap::SizedQueue.new("cached_mapped_queue_benchmark", 20,
-        :page_handler => Mmap::PageCache.new("cached_mapped_queue_benchmark", :page_size => 20 * 1024 * 1024, :cache_size => 2)
-      )
+      :queue => Mmap::SizedQueue.new(20, :page_handler => Mmap::PageCache.new("cached_mapped_queue_benchmark", :page_size => PAGE_SIZE, :cache_size => 2))
     },
     {
       :name => "SizedQueue/SinglePage",
-      :queue => Mmap::SizedQueue.new("single_mapped_queue_benchmark", 20,
-        :page_handler => Mmap::SinglePage.new("single_mapped_queue_benchmark", :page_size => 2048)
-      )
+      :queue => Mmap::SizedQueue.new(20, :page_handler => Mmap::SinglePage.new("single_mapped_queue_benchmark", :page_size => PAGE_SIZE))
     }
   ]
 
@@ -62,6 +59,6 @@ SOURCE = ITEMS.times.map{|i| "somedata #" + ("%07d" % i)}
     consumers.each {results = results + all_results.pop}
     raise if results.sort != expected_result
     puts(" success")
-    queue.close
+    queue.purge
   end
 end
