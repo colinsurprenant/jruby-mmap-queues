@@ -2,3 +2,4 @@
 
 require "jruby-mmap-queues/paged_queue"
 require "jruby-mmap-queues/sized_queue"
+require "jruby-mmap-queues/queue"
